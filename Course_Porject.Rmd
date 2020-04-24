@@ -1,0 +1,113 @@
+---
+title: "Course_Project"
+author: "LyPu"
+date: "4/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+In this project, your will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways:  
+- exactly according to the specification (Class A),  
+- throwing the elbows to the front (Class B),  
+- lifting the dumbbell only halfway (Class C),  
+- lowering the dumbbell only halfway (Class D),  
+- throwing the hips to the front (Class E).    
+The goal of your project is to predict the manner (he "classe" variable in the training set) in which they did the exercise. 
+
+```{r}
+setwd("~/Desktop/Exercises/Course8")
+if (!file.exists("./training.csv")) {
+    download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./training.csv")
+}
+training <-read.csv("training.csv", na.strings = c("NA", "#DIV/0!", ""))
+if (!file.exists("./testing.csv")) {
+    download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" , destfile = "./testing.csv")
+}
+testing <- read.csv("testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+```
+There are `r nrow(training)` observations in the training set and `r nrow(testing)` observations in the testing set.
+
+We can do some cleaning to remove variables that contain mostly NA values in the training set and remove some of the variables that are not candidate predictors.
+```{r}
+removeNA<-function(df){
+    numRows<-nrow(df)
+    rawDF<-is.na(df)
+    removeCol<-which(colSums(rawDF)>numRows * 0.5)
+    
+    if(length(removeCol)>0){
+        colNames<-names(removeCol)
+        df<-df[, !(names(df) %in% colNames)]
+    }
+    df
+}
+
+training<-removeNA(training)
+testing<-removeNA(testing)
+
+excludeCol<-c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window")
+removeCol<-function(df, excludeCol){
+    df<-df[, !names(df) %in% excludeCol]
+    df
+}
+training<-removeCol(training, excludeCol)
+testing<-removeCol(testing, excludeCol)
+
+# statisticsPattern<-"kurtosis_|skewness_|max_|min_|amplitude_|avg_|stddev_|var_"
+# removeCol2<-function(df, statisticsPattern){
+#     df<-df[, -grep(statisticsPattern, colnames(df))]
+#     df
+# }
+# trainig<-removeCol2(training, statisticsPattern)
+# testing<-removeCol2(testing, statisticsPattern)
+```
+
+We can take a look at the rough distribution of classe variable in the training set:
+```{r}
+table(training$classe)
+```
+
+## Analysis
+
+We use 70% data in the training set to build model and use the remaining 30% to do cross validation.
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+set.seed(1234)
+inTrain<-createDataPartition(y=training$classe, p=0.7, list=FALSE)
+subTraining<-training[inTrain,]
+subTesting<-training[-inTrain,]
+
+```
+
+We can use Random Forest Model to do the prediction.
+```{r, message=FALSE, warning=FALSE}
+library(randomForest)
+set.seed(12345)
+model<-randomForest(classe ~., data=subTraining, method = "class")
+model
+plot(model)
+```
+
+```{r}
+pred<-predict(model, subTesting, type="class")
+confusionMatrix(pred, subTesting$classe)
+```
+As can be seen above, the model overall accuracy is `r confusionMatrix(pred, subTesting$classe)$overall['Accuracy']` in the validation set. We can also plot the variable importance.
+
+```{r}
+varImpPlot(model)
+```
+
+## Results
+Then we apply this model to the testing set.
+```{r}
+pred_final<-predict(model, testing, type="class")
+pred_final
+```
+
+
+
